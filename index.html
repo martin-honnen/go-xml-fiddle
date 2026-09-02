@@ -6,8 +6,11 @@
 </head>
 <body>
 <h1>Go WebAssembly Demo</h1>
-<button onclick="testGreet()">Click Me!</button>
-<div id="output"></div>
+<button onclick="testGreet()">Test greeting!</button>
+<button onclick="testXPath()">Test XPath!</button>
+<button onclick="testXSLT30()">Test XSLT 3.0!</button>
+<button onclick="testXQuery()">Test XQuery!</button>
+<pre id="output"></pre>
 <script>
     const worker = new Worker("worker.js");
     let workerReady = false;
@@ -20,13 +23,42 @@
                 break;
             case "result":
                 console.log("we got a result: ", payload);
-                document.getElementById("output").innerHTML = payload;
+                document.getElementById("output").textContent = payload;
                 break;
             default:
                 console.error(`Unknown action: ${action}`);
         }
     };
 
+    function testXPath() {
+        if (workerReady) {
+            worker.postMessage({action: "xpath", payload: {xml : "<root><item>b</item><item>c</item><item>a</item></root>", expression: "sort(//item)"}});
+        } else {
+            console.error("Worker is not ready yet.");
+        }
+    }
+
+    function testXSLT30() {
+        if (workerReady) {
+            worker.postMessage({action: "xslt", payload: {xml : "<root><item>b</item><item>c</item><item>a</item></root>", xslt: "<xsl:stylesheet version='3.0' xmlns:xsl='http://www.w3.org/1999/XSL/Transform' expand-text='yes'><xsl:mode on-no-match='shallow-copy'/><xsl:template match='/'><xsl:copy><xsl:apply-templates/><xsl:comment>Run with {system-property('xsl:product-name')} {system-property('xsl:product-version')} at {current-dateTime()}</xsl:comment></xsl:copy></xsl:template></xsl:stylesheet>"}});
+        }
+        else {
+            console.error("Worker is not ready yet.");
+        }
+    }
+
+    function testXQuery() {
+        if (workerReady) {
+            worker.postMessage({action: "xquery",
+                payload: {
+                    xml: "<root><item>b</item><item>c</item><item>a</item></root>",
+                    query: "declare namespace output = 'http://www.w3.org/2010/xslt-xquery-serialization'; declare option output:method 'adaptive'; declare option output:indent 'yes'; * ! element { node-name() } { sort(item) }"
+                }
+            });
+        } else {
+            console.error("Worker is not ready yet.");
+        }
+    }
     function testGreet() {
         if (workerReady) {
             worker.postMessage({action: "greet", payload: {name: "Developer"}});
