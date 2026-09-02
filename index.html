@@ -8,7 +8,34 @@
 <h1>Go WebAssembly Demo</h1>
 <button onclick="testGreet()">Click Me!</button>
 <div id="output"></div>
+<script>
+    const worker = new Worker("worker.js");
+    let workerReady = false;
+    worker.onmessage = ({ data }) => {
+        let { action, payload } = data;
+        switch (action) {
+            case "ready":
+                workerReady = true;
+                worker.postMessage({action: "greet", payload: {name: "Developer"}});
+                break;
+            case "result":
+                console.log("we got a result: ", payload);
+                document.getElementById("output").innerHTML = payload;
+                break;
+            default:
+                console.error(`Unknown action: ${action}`);
+        }
+    };
 
+    function testGreet() {
+        if (workerReady) {
+            worker.postMessage({action: "greet", payload: {name: "Developer"}});
+        } else {
+            console.error("Worker is not ready yet.");
+        }
+    }
+</script>
+<!--
 <script src="wasm_exec.js"></script>
 <script>
     const go = new Go();
@@ -22,5 +49,6 @@
         document.getElementById("output").innerHTML = message;
     }
 </script>
+-->
 </body>
 </html>
