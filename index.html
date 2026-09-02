@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Go WebAssembly Example</title>
+</head>
+<body>
+<h1>Go WebAssembly Demo</h1>
+<button onclick="testGreet()">Click Me!</button>
+<div id="output"></div>
+
+<script src="wasm_exec.js"></script>
+<script>
+    const go = new Go();
+    WebAssembly.instantiateStreaming(fetch("main.wasm"), go.importObject)
+        .then(result => {
+            go.run(result.instance);
+        });
+
+    function testGreet() {
+        const message = greet("Developer");
+        document.getElementById("output").innerHTML = message;
+    }
+</script>
+</body>
+</html>
