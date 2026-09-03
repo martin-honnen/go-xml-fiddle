@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<html lang="en">
+  <head>
+    <title>go-xml Workbench: XSLT 3.0, XQuery 3.1, XPath 3.1</title>
+  </head>
+  <body>
+    <section>
+      <h1>Release 1.2.0 alpha 1</h1>
+      <section>
+        <h2>Features using go-xml</h2>
+        <ul>
+          <li>XSLT 3.0 against XML no input starting with <code>xsl:template name="xsl:initial-template"</code>,
+              allowing the use of <code>xsl:result-document</code> and <code>xsl:message</code>, presented in the result editor pane</li>
+          <li>XQuery 3.1 against XML no input</li>
+          <li>XPath 3.1 against XML or no input, now with prefixes/namespaces <code>xs</code>, <code>map</code>, <code>array</code>, <code>math</code> and <code>err</code> predeclared</li>
+          <li>optional automatic evaluation of XSLT/XQuery/XPath as go-xml is run from a web worker</li>
+        </ul>
+      </section>
+    </section>
+  </body>
+</html>

@@ -2,10 +2,11 @@ importScripts("wasm_exec.js");
 
 const go = new Go();
 WebAssembly.instantiateStreaming(fetch("main.wasm"), go.importObject).then((result) => {
-    // Start the Go runtime. main.go registers `greet` on the worker global
-    // object through syscall/js; it is not a WebAssembly instance export.
+    postMessage({action : 'hide', payload : { id : 'go-load-indicator' }});
     go.run(result.instance);
     postMessage({ action: "ready", payload: null });
+    postMessage({action : 'hide', payload : { id : 'go-xml-load-indicator' }});
+
 }).catch((err) => {
     console.error("Worker failed to load WASM module: ", err)
 });
