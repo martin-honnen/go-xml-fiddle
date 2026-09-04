@@ -31,10 +31,15 @@ onmessage = ({ data }) => {
                 payload.codeBaseURI, payload.inputBaseURI);
             postMessage({ action: "result", payload: xpathRes });
             break;
+        // A transformation answers with a list rather than a single string:
+        // the principal result, then whatever xsl:result-document wrote, then
+        // the xsl:message output and the warnings. It gets an action of its
+        // own so the page can tell that shape apart from the single result
+        // XPath and XQuery return.
         case "xslt":
             const xsltRes = self.xslt30(payload.xslt, payload.xml,
                 payload.codeBaseURI, payload.inputBaseURI);
-            postMessage({ action: "result", payload: xsltRes });
+            postMessage({ action: "XSLT-Results", payload: xsltRes });
             break;
         case "xquery":
             const xqueryRes = self.xquery31(payload.query, payload.xml,

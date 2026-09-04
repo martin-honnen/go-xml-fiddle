@@ -25,6 +25,14 @@
                 console.log("we got a result: ", payload);
                 document.getElementById("output").textContent = payload;
                 break;
+            // A transformation answers with a list of result documents, each
+            // with the label it is known by, so this demo simply prints them
+            // one after another under their labels.
+            case "XSLT-Results":
+                console.log("we got results: ", payload);
+                document.getElementById("output").textContent =
+                    payload.map(r => r.uri + "\n" + r.content).join("\n\n");
+                break;
             default:
                 console.error(`Unknown action: ${action}`);
         }

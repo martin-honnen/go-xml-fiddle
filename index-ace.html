@@ -44,7 +44,13 @@
       typingTimeout = autoEvaluation ? setTimeout(evaluate, doneTypingInterval) : 0;//new Promise(res => setTimeout(evaluate, doneTypingInterval)) : 0;
     }
 
+    // The result documents currently listed, kept so that the save link can
+    // find the output method and the label of whichever one is selected.
+    var currentResults = [];
+
     function renderXsltResults(results, resultsSelect) {
+
+      currentResults = results;
 
       resultsSelect.length = 0;
 
@@ -71,8 +77,48 @@
     function renderResults(results, resultsSelect) {
       resultsSelect.length = 0;
       var principalResult = results[0];
+      // XPath and XQuery are serialized with the adaptive method, which is a
+      // sequence rather than a document, so there is nothing to list and no
+      // markup mode to put the editor in.
+      currentResults = [{ uri: 'result', content: principalResult, method: 'adaptive' }];
       setDocument(resultEditor, principalResult, 'xml');
       writeResult(window.frames['current-result-frame'], principalResult);
+    }
+
+    // saveResult arms the download link for the result the dropdown shows.
+    //
+    // The label of a result is not usable as a file name as it stands: the
+    // primary result, the messages and the warnings are listed under
+    // asterisked titles, and an xsl:result-document href is a URI reference
+    // that may carry directories and a query. Both are reduced to a plain
+    // name here, and the output method supplies the extension and the media
+    // type when the label has no extension of its own.
+    function saveResult(anchor) {
+      var selected = document.getElementById('results').selectedIndex;
+      var result = currentResults[selected] || currentResults[0] ||
+          { uri: 'result', method: 'text' };
+      anchor.download = resultFileName(result.uri, result.method);
+      var blob = new Blob([resultEditor.session.getValue()],
+          { type: methodMediaTypes[result.method] || 'text/plain' });
+      anchor.href = window.URL.createObjectURL(blob);
+    }
+
+    function resultFileName(label, method) {
+      var name = String(label == null ? '' : label).replace(/\*/g, '').trim();
+      // An href names a path; only its last segment is the file, and a query
+      // or fragment is not part of the name at all.
+      name = name.split(/[?#]/)[0];
+      name = name.slice(Math.max(name.lastIndexOf('/'), name.lastIndexOf('\\')) + 1);
+      // Everything Windows forbids in a name, plus whitespace, which survives
+      // a download but makes a poor file name.
+      name = name.replace(/[<>:"/\\|?*\x00-\x1f]/g, '-').replace(/\s+/g, '-');
+      if (name === '' || name === '.' || name === '..') {
+        name = 'result';
+      }
+      if (!/\.[A-Za-z0-9]+$/.test(name)) {
+        name += '.' + (methodExtensions[method] || 'txt');
+      }
+      return name;
     }
 
     const goXmlWorker = new Worker("worker.js");
@@ -81,9 +127,8 @@
 
     goXmlWorker.onmessage = ({ data }) => {
         let { action, payload } = data;
-      if (action === 'XSLT-Results' || action === 'xquery-result') {
-        var results = e.data.results;
-        renderXsltResults(results, document.querySelector('#results'));
+      if (action === 'XSLT-Results') {
+        renderXsltResults(payload, document.querySelector('#results'));
       }
       else if (action === 'result') {
         renderResults([payload], document.querySelector('#results'));
@@ -270,7 +315,7 @@
         <section class="grid-row">
             <div class="grid-item">
                 <div id="result-editor" class="editor"></div>
-                <a id="save-result" onclick="var blob = new Blob([resultEditor.session.getValue()], { type: 'text/html' }); this.download = document.getElementById('results').value; this.href = window.URL.createObjectURL(blob);">save</a>
+                <a id="save-result" onclick="saveResult(this);">save</a>
             </div>
             <div id="result-frame-container" class="grid-item">
                 <iframe id="current-result-frame" name="current-result-frame" src="about:blank" sandbox="allow-forms allow-scripts allow-same-origin"></iframe>
