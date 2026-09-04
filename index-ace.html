@@ -104,12 +104,24 @@
 
     document.addEventListener('DOMContentLoaded', autoEvaluate, false);
 
+    // The base URIs are passed through as they are, including the
+    // 'urn:from-string' marker the editors carry until an example is loaded.
+    // Nothing relative can resolve against a urn: -- it is not hierarchical
+    // -- so an xsl:include in hand-typed text is reported as unresolvable
+    // rather than silently ignored, which is the right answer for it.
     function xpath(input, xpathCode, inputType, codeBaseURI, inputBaseURI, resultsSelect) {
         if (workerReady) {
             if (!autoEvaluation)
                 setDocument(resultEditor, "Evaluating your XPath...", "text");
 
-            goXmlWorker.postMessage({action: "xpath", payload: {xml : input, expression: xpathCode}});;
+            goXmlWorker.postMessage({action: "xpath",
+                payload: {
+                    xml: input,
+                    expression: xpathCode,
+                    codeBaseURI: codeBaseURI,
+                    inputBaseURI: inputBaseURI
+                }
+            });
         }
     }
 
@@ -121,7 +133,9 @@
             goXmlWorker.postMessage({action: "xquery",
                 payload: {
                     xml: input,
-                    query: xquery
+                    query: xquery,
+                    codeBaseURI: codeBaseURI,
+                    inputBaseURI: inputBaseURI
                 }
             });
         }
@@ -132,7 +146,14 @@
             if (!autoEvaluation)
                 setDocument(resultEditor, "Processing your XSLT...", "text");
 
-            goXmlWorker.postMessage({action: "xslt", payload: {xml : input, xslt: xslt}});
+            goXmlWorker.postMessage({action: "xslt",
+                payload: {
+                    xml: input,
+                    xslt: xslt,
+                    codeBaseURI: xsltBaseURI,
+                    inputBaseURI: inputBaseURI
+                }
+            });
         }
     }
 
@@ -198,35 +219,19 @@
           </optgroup>
       </select></label>
       <label>auto-evaluation <input type="checkbox" id="auto-evaluate" checked></label>
+      <!-- The base URIs come from the globals loadExample sets. They used to
+           be recomputed here from a gist id that is never assigned, so every
+           click passed 'urn:from-string' and shadowed the real ones -- which
+           went unnoticed while nothing resolved relative URIs, and stops a
+           module-based stylesheet compiling now that something does. -->
       <input type="button" id="transform" value="XSLT transformation" accesskey="t"
              onclick="var inputType = document.getElementById('input-types').form['input-type'].value;
-		                    var codeType = document.getElementById('input-types').form['code-type'].value;
-                        var codeFileInput = document.getElementById('codeFile');
-                        var codeFileName = codeFileInput != null ? codeFileInput.value : '';
-                        var inputFileInput = document.getElementById('inputFile');
-                        var inputFileName = inputFileInput != null ? inputFileInput.value : '';
-                        var inputBaseURI = inputFileName != '' && gistId != null ? new window.URL(inputFileName, gistBaseURI).href : 'urn:from-string';
-                        var codeBaseURI = codeFileName != '' && gistId != null ? new window.URL(codeFileName, gistBaseURI).href : 'urn:from-string';
                         transform(inputType !== 'None' ? inputEditor.session.getValue() : null, codeEditor.session.getValue(), inputType, codeBaseURI, inputBaseURI, document.getElementById('results'));">
       <input type="button" id="xquery" value="XQuery" accesskey="q"
              onclick="var inputType = document.getElementById('input-types').form['input-type'].value;
-		                    var codeType = document.getElementById('input-types').form['code-type'].value;
-                        var codeFileInput = document.getElementById('codeFile');
-                        var codeFileName = codeFileInput != null ? codeFileInput.value : '';
-                        var inputFileInput = document.getElementById('inputFile');
-                        var inputFileName = inputFileInput != null ? inputFileInput.value : '';
-                        var inputBaseURI = inputFileName != '' && gistId != null ? new window.URL(inputFileName, gistBaseURI).href : 'urn:from-string';
-                        var codeBaseURI = codeFileName != '' && gistId != null ? new window.URL(codeFileName, gistBaseURI).href : 'urn:from-string';
                         xquery(inputType !== 'None' ? inputEditor.session.getValue() : null, codeEditor.session.getValue(), inputType, codeBaseURI, inputBaseURI, document.getElementById('results'));">
       <input type="button" id="xpath" value="XPath" accesskey="a"
              onclick="var inputType = document.getElementById('input-types').form['input-type'].value;
-		                    var codeType = document.getElementById('input-types').form['code-type'].value;
-                        var codeFileInput = document.getElementById('codeFile');
-                        var codeFileName = codeFileInput != null ? codeFileInput.value : '';
-                        var inputFileInput = document.getElementById('inputFile');
-                        var inputFileName = inputFileInput != null ? inputFileInput.value : '';
-                        var inputBaseURI = inputFileName != '' && gistId != null ? new window.URL(inputFileName, gistBaseURI).href : 'urn:from-string';
-                        var codeBaseURI = codeFileName != '' && gistId != null ? new window.URL(codeFileName, gistBaseURI).href : 'urn:from-string';
                         xpath(inputType !== 'None' ? inputEditor.session.getValue() : null, codeEditor.session.getValue(), inputType, codeBaseURI, inputBaseURI, document.getElementById('results'));">
       <!--<input type="button" id="xsd" value="XSD" accesskey="V" title="validate XML against XSD schema"
             onclick="validate(inputEditor.session.getValue(), codeEditor.session.getValue(), document.getElementById('results'));">-->
