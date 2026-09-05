@@ -207,6 +207,24 @@ func firstResultElement(seq xdm.Sequence) *xdm.Node {
 	return first
 }
 
+// setClock supplies the one timestamp fn:current-dateTime, fn:current-date and
+// fn:current-time report.
+//
+// They read it from the dynamic context rather than the system clock, so that
+// every call within one evaluation agrees — and go-xml leaves it unset in a
+// Context built by hand, raising FODC0001 ("no transform clock configured")
+// instead of inventing a reading. xslt.Transform defaults it to time.Now for
+// the caller, which is why the same expression works in a stylesheet and fails
+// in a bare query.
+//
+// The reading itself is UTC as far as the result is concerned: the offset comes
+// from Context.ImplicitTimezone, whose zero value is Z, and not from the Go
+// time's own location. That matches what a transformation reports here, since
+// xslt.TransformOptions.ImplicitTimezone is left at its zero value too.
+func setClock(ctx *xpath.Context) {
+	ctx.Now, ctx.HasNow = time.Now(), true
+}
+
 func xpathEval(this js.Value, args []js.Value) interface{} {
 	if len(args) == 0 || args[0].Type() != js.TypeString {
 		return "xpath error: an XPath expression is required"
@@ -242,6 +260,7 @@ func xpathEval(this js.Value, args []js.Value) interface{} {
 	ctx.StaticBaseURI = exprBase
 	ctx.Docs = resolver
 	ctx.Texts = resolver
+	setClock(ctx)
 	seq, err := compiled.Eval(ctx)
 
 	if err != nil {
@@ -404,6 +423,7 @@ func xquery31(this js.Value, args []js.Value) interface{} {
 	ctx.Version = xpath.XPath31
 	ctx.Docs = resolver
 	ctx.Texts = resolver
+	setClock(ctx)
 	seq, err := xquery.Eval(args[0].String(), ctx, xquery.Options{
 		// BaseURI is what the query runs under; DeclarationBaseURI is what a
 		// relative "declare base-uri" in the prolog resolves against.
