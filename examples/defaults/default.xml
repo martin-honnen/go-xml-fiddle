@@ -11,7 +11,7 @@
         <ul>
           <li>XSLT 3.0 against XML no input starting with <code>xsl:template name="xsl:initial-template"</code>,
               allowing the use of <code>xsl:result-document</code> and <code>xsl:message</code>, presented in the result editor pane</li>
-          <li>XQuery 3.1 against XML no input</li>
+          <li>XQuery 3.1 against XML or no input</li>
           <li>XPath 3.1 against XML or no input, now with prefixes/namespaces <code>xs</code>, <code>map</code>, <code>array</code>, <code>math</code> and <code>err</code> predeclared</li>
           <li>optional automatic evaluation of XSLT/XQuery/XPath as go-xml is run from a web worker</li>
         </ul>

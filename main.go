@@ -81,6 +81,39 @@ const (
 // nsXHTML is the namespace whose html element selects the xhtml output method.
 const nsXHTML = "http://www.w3.org/1999/xhtml"
 
+const (
+	nsXPathFunctions = "http://www.w3.org/2005/xpath-functions"
+	nsXPathMap       = nsXPathFunctions + "/map"
+	nsXPathArray     = nsXPathFunctions + "/array"
+	nsXPathMath      = nsXPathFunctions + "/math"
+	nsXQTErrors      = "http://www.w3.org/2005/xqt-errors"
+)
+
+// xpathNamespaces binds the standard XPath 3.1 prefixes at compile time.
+// Prefixes in an XPath expression must be resolved before evaluation.
+type xpathNamespaces struct{}
+
+func (xpathNamespaces) ResolvePrefix(prefix string) (string, bool) {
+	switch prefix {
+	case "fn":
+		return nsXPathFunctions, true
+	case "map":
+		return nsXPathMap, true
+	case "array":
+		return nsXPathArray, true
+	case "math":
+		return nsXPathMath, true
+	case "err":
+		return nsXQTErrors, true
+	default:
+		return "", false
+	}
+}
+
+func (xpathNamespaces) DefaultElementNamespace() string { return "" }
+
+func (xpathNamespaces) DefaultFunctionNamespace() string { return nsXPathFunctions }
+
 // resultDoc is one entry in the list the workbench renders: the label for its
 // dropdown, the serialized text, and the output method it was written with,
 // which is what selects the editor's syntax mode.
@@ -232,7 +265,7 @@ func xpathEval(this js.Value, args []js.Value) interface{} {
 
 	// Compile defaults to XPath 2.0. fn:sort is an XPath 3.1 function,
 	// so explicitly select XPath 3.1 here.
-	compiled, err := xpath.CompileVersion(args[0].String(), nil, xpath.XPath31)
+	compiled, err := xpath.CompileVersion(args[0].String(), xpathNamespaces{}, xpath.XPath31)
 	if err != nil {
 		return fmt.Sprintf("xpath error: %v", err)
 	}
