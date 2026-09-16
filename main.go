@@ -67,6 +67,51 @@ func stringArg(args []js.Value, i int) string {
 	return ""
 }
 
+const jsonParserStylesheet = `<xsl:stylesheet version="3.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  exclude-result-prefixes="#all">
+  <xsl:output method="adaptive"/>
+  <xsl:param name="json" as="xs:string"/>
+  <xsl:template name="xsl:initial-template">
+    <xsl:sequence select="parse-json($json)"/>
+  </xsl:template>
+</xsl:stylesheet>`
+
+var (
+	jsonParser, jsonParserErr = compileJSONParser()
+)
+
+// compileJSONParser builds the parse-json wrapper once. Each evaluation only
+// supplies the JSON text as its top-level parameter.
+func compileJSONParser() (*xslt.Stylesheet, error) {
+	tree, err := xdm.ParseString(jsonParserStylesheet, xdm.ParseOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("parse JSON stylesheet: %w", err)
+	}
+	stylesheet, err := xslt.Compile(tree.Root, xslt.CompileOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("compile JSON parser: %w", err)
+	}
+	return stylesheet, nil
+}
+
+// parseJSON turns one JSON text into its XDM item using the stylesheet
+// compiled at startup, so all three evaluation modes share fn:parse-json.
+func parseJSON(input string) (xdm.Sequence, error) {
+	if jsonParserErr != nil {
+		return nil, jsonParserErr
+	}
+	result, err := jsonParser.Transform(context.Background(), nil, xslt.TransformOptions{
+		Params: map[string]xdm.Sequence{
+			"json": xdm.One(xdm.NewString(input)),
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	return result.Nodes, nil
+}
+
 // The labels the workbench lists alongside the hrefs of the documents an
 // xsl:result-document named. They are bracketed in asterisks so that nothing
 // a stylesheet could write as an href collides with one.
@@ -270,23 +315,34 @@ func xpathEval(this js.Value, args []js.Value) interface{} {
 		return fmt.Sprintf("xpath error: %v", err)
 	}
 
-	exprBase, sourceBase := stringArg(args, 2), stringArg(args, 3)
+	inputType, exprBase, sourceBase := stringArg(args, 2), stringArg(args, 3), stringArg(args, 4)
 	resolver := newFetchResolver()
 
-	var root *xdm.Node
+	var item xdm.Item
 	if len(args) > 1 && args[1].Type() == js.TypeString {
-		tree, err := xdm.ParseString(args[1].String(), xdm.ParseOptions{
-			BaseURI:     sourceBase,
-			DocumentURI: sourceBase,
-		})
-		if err != nil {
-			return fmt.Sprintf("xpath error: invalid XML: %v", err)
+		if inputType == "JSON" {
+			seq, err := parseJSON(args[1].String())
+			if err != nil {
+				return fmt.Sprintf("xpath error: invalid JSON: %v", err)
+			}
+			if len(seq) != 1 {
+				return "xpath error: parsing JSON did not produce one XDM item"
+			}
+			item = seq[0]
+		} else {
+			tree, err := xdm.ParseString(args[1].String(), xdm.ParseOptions{
+				BaseURI:     sourceBase,
+				DocumentURI: sourceBase,
+			})
+			if err != nil {
+				return fmt.Sprintf("xpath error: invalid XML: %v", err)
+			}
+			item = tree.Root
+			resolver.Preload(sourceBase, tree)
 		}
-		root = tree.Root
-		resolver.Preload(sourceBase, tree)
 	}
 
-	ctx := xpath.NewContext(root, xpath.Builtins())
+	ctx := xpath.NewContext(item, xpath.Builtins())
 	ctx.Version = xpath.XPath31
 	// The expression's own base URI, which is what a relative reference in
 	// fn:doc resolves against and what fn:static-base-uri reports.
@@ -323,7 +379,7 @@ func xslt30(this js.Value, args []js.Value) interface{} {
 		return errorResult("xslt error: a stylesheet is required")
 	}
 
-	sheetBase, sourceBase := stringArg(args, 2), stringArg(args, 3)
+	inputType, sheetBase, sourceBase := stringArg(args, 2), stringArg(args, 3), stringArg(args, 4)
 	resolver := newFetchResolver()
 
 	stylesheetTree, err := xdm.ParseString(args[0].String(), xdm.ParseOptions{
@@ -350,26 +406,36 @@ func xslt30(this js.Value, args []js.Value) interface{} {
 	}
 
 	var source *xdm.Node
+	var initialMatchSelection xdm.Sequence
 	if len(args) > 1 && args[1].Type() == js.TypeString {
-		sourceTree, err := xdm.ParseString(args[1].String(), xdm.ParseOptions{
-			BaseURI:     sourceBase,
-			DocumentURI: sourceBase,
-		})
-		if err != nil {
-			return errorResult("xslt error: invalid source XML: %v", err)
+		if inputType == "JSON" {
+			seq, err := parseJSON(args[1].String())
+			if err != nil {
+				return errorResult("xslt error: invalid source JSON: %v", err)
+			}
+			initialMatchSelection = seq
+		} else {
+			sourceTree, err := xdm.ParseString(args[1].String(), xdm.ParseOptions{
+				BaseURI:     sourceBase,
+				DocumentURI: sourceBase,
+			})
+			if err != nil {
+				return errorResult("xslt error: invalid source XML: %v", err)
+			}
+			source = sourceTree.Root
+			// So that fn:doc of this document's own URI hands back these very
+			// nodes rather than a second parse of the same bytes.
+			resolver.Preload(sourceBase, sourceTree)
 		}
-		source = sourceTree.Root
-		// So that fn:doc of this document's own URI hands back these very
-		// nodes rather than a second parse of the same bytes.
-		resolver.Preload(sourceBase, sourceTree)
 	}
 
 	// The same resolver serves fn:doc and fn:unparsed-text. It is also how a
 	// nested transform reaches its own xsl:import, which is what DocBook's
 	// fn:transform pipeline stages need.
 	result, err := stylesheet.Transform(context.Background(), source, xslt.TransformOptions{
-		Documents: resolver,
-		Texts:     resolver,
+		Documents:             resolver,
+		Texts:                 resolver,
+		InitialMatchSelection: initialMatchSelection,
 	})
 	if err != nil {
 		// A failed transform returns no Result at all, so there are no
@@ -436,23 +502,34 @@ func xquery31(this js.Value, args []js.Value) interface{} {
 		return "xquery error: a query is required"
 	}
 
-	queryBase, sourceBase := stringArg(args, 2), stringArg(args, 3)
+	inputType, queryBase, sourceBase := stringArg(args, 2), stringArg(args, 3), stringArg(args, 4)
 	resolver := newFetchResolver()
 
-	var root *xdm.Node
+	var item xdm.Item
 	if len(args) > 1 && args[1].Type() == js.TypeString {
-		tree, err := xdm.ParseString(args[1].String(), xdm.ParseOptions{
-			BaseURI:     sourceBase,
-			DocumentURI: sourceBase,
-		})
-		if err != nil {
-			return fmt.Sprintf("xquery error: invalid input XML: %v", err)
+		if inputType == "JSON" {
+			seq, err := parseJSON(args[1].String())
+			if err != nil {
+				return fmt.Sprintf("xquery error: invalid input JSON: %v", err)
+			}
+			if len(seq) != 1 {
+				return "xquery error: parsing JSON did not produce one XDM item"
+			}
+			item = seq[0]
+		} else {
+			tree, err := xdm.ParseString(args[1].String(), xdm.ParseOptions{
+				BaseURI:     sourceBase,
+				DocumentURI: sourceBase,
+			})
+			if err != nil {
+				return fmt.Sprintf("xquery error: invalid input XML: %v", err)
+			}
+			item = tree.Root
+			resolver.Preload(sourceBase, tree)
 		}
-		root = tree.Root
-		resolver.Preload(sourceBase, tree)
 	}
 
-	ctx := xpath.NewContext(root, xpath.Builtins())
+	ctx := xpath.NewContext(item, xpath.Builtins())
 	ctx.Version = xpath.XPath31
 	ctx.Docs = resolver
 	ctx.Texts = resolver

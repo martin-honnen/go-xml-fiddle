@@ -162,6 +162,7 @@
             goXmlWorker.postMessage({action: "xpath",
                 payload: {
                     xml: input,
+                    inputType: inputType,
                     expression: xpathCode,
                     codeBaseURI: codeBaseURI,
                     inputBaseURI: inputBaseURI
@@ -178,6 +179,7 @@
             goXmlWorker.postMessage({action: "xquery",
                 payload: {
                     xml: input,
+                    inputType: inputType,
                     query: xquery,
                     codeBaseURI: codeBaseURI,
                     inputBaseURI: inputBaseURI
@@ -194,6 +196,7 @@
             goXmlWorker.postMessage({action: "xslt",
                 payload: {
                     xml: input,
+                    inputType: inputType,
                     xslt: xslt,
                     codeBaseURI: xsltBaseURI,
                     inputBaseURI: inputBaseURI

@@ -26,8 +26,9 @@ onmessage = ({ data }) => {
         // are optional: code typed into the editor has no base URI to give,
         // and the Go side treats a missing one as absent.
         case "xpath":
-            const { xml, expression } = payload;
+            const { xml, expression, inputType } = payload;
             const xpathRes = self.xpathEval(expression, xml,
+                inputType,
                 payload.codeBaseURI, payload.inputBaseURI);
             postMessage({ action: "result", payload: xpathRes });
             break;
@@ -38,11 +39,13 @@ onmessage = ({ data }) => {
         // XPath and XQuery return.
         case "xslt":
             const xsltRes = self.xslt30(payload.xslt, payload.xml,
+                payload.inputType,
                 payload.codeBaseURI, payload.inputBaseURI);
             postMessage({ action: "XSLT-Results", payload: xsltRes });
             break;
         case "xquery":
             const xqueryRes = self.xquery31(payload.query, payload.xml,
+                payload.inputType,
                 payload.codeBaseURI, payload.inputBaseURI);
             postMessage({ action: "result", payload: xqueryRes });
             break;
