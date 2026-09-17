@@ -25,8 +25,26 @@
         );
         document.getElementById('render-result').addEventListener('click',
             function (evt) {
-                document.getElementById('result-frame-container').style.display =
-                    document.getElementById('render-box').checked ? '' : 'none';
+                var showFrame = document.getElementById('render-box').checked;
+                var resultEditorCol = document.getElementById('result-editor-col');
+                var resultFrameResizer = document.getElementById('result-frame-resizer');
+
+                document.getElementById('result-frame-container').style.display = showFrame ? '' : 'none';
+                resultFrameResizer.style.display = showFrame ? '' : 'none';
+
+                if (showFrame) {
+                    // Restore whatever split the user had dragged to before hiding the frame.
+                    resultEditorCol.style.flex = resultEditorCol.dataset.savedFlex || '';
+                    delete resultEditorCol.dataset.savedFlex;
+                } else {
+                    // Remember the current split (may have been set by dragging the resizer)
+                    // and let the editor take the full row while the frame is hidden.
+                    resultEditorCol.dataset.savedFlex = resultEditorCol.style.flex || '';
+                    resultEditorCol.style.flex = '1 1 100%';
+                }
+
+                if (window.resultEditor) resultEditor.resize();
+
                 return true;
             },
             false

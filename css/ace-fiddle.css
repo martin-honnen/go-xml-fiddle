@@ -27,20 +27,45 @@ html, body {
     flex-grow: 1;
     flex-basis: 100%;
     flex-direction: column;
+    min-height: 0;
+}
+
+main.view-container {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+#input-code-row {
+    flex: 1 1 50%;
+    min-height: 60px;
+}
+
+#bottom-group {
+    flex: 1 1 50%;
+    min-height: 60px;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+#result-row {
+    flex: 1 1 auto;
+    min-height: 0;
 }
 
 .grid-row {
     display: flex;
-    flex-flow: row wrap;
+    flex-flow: row nowrap;
     justify-content: flex-start;
-    flex-basis: 50%;
-    /* height: 50%; */
     /*background-color: lightgreen;*/
+    min-width: 0;
+    min-height: 0;
 }
 
 .button-bar {
     align-items: center;
-    flex-basis: auto;
+    flex: 0 0 auto;
     justify-content: space-around;
 }
 
@@ -49,12 +74,62 @@ html, body {
 }
 
 .grid-item {
-    flex-grow: 1;
-    flex-basis: 50%;
+    flex: 1 1 50%;
     height: 100%;
+    min-width: 0;
+    min-height: 0;
     position: relative;
     /*background-color: lightyellow;*/
     /*border: 1px solid red;*/
+}
+
+/* Splitters (resizer handles) between panes. A vertical resizer is a thin,
+   full-height bar the user drags left/right; a horizontal resizer is a thin,
+   full-width bar dragged up/down. Both grow to a highlighted hit area on
+   hover so the exact 1px seam is easy to grab. */
+.resizer {
+    flex: 0 0 auto;
+    background-color: #d8d8d8;
+    z-index: 10;
+}
+
+.resizer:hover,
+.resizer.resizing {
+    background-color: #9fb8d8;
+}
+
+.resizer-vertical {
+    width: 6px;
+    cursor: col-resize;
+    align-self: stretch;
+}
+
+.resizer-horizontal {
+    height: 6px;
+    cursor: row-resize;
+    width: 100%;
+}
+
+body.resizing-col * {
+    cursor: col-resize !important;
+    user-select: none !important;
+}
+
+body.resizing-row * {
+    cursor: row-resize !important;
+    user-select: none !important;
+}
+
+/* While dragging a resizer, iframes and the Ace editors capture their own
+   mouse/pointer events and swallow pointermove before it ever reaches the
+   document-level drag handler, which is why dragging towards them felt
+   unreliable. Disabling pointer events on them for the duration of the drag
+   lets the parent document keep receiving the moves. */
+body.resizing-col .editor,
+body.resizing-col iframe,
+body.resizing-row .editor,
+body.resizing-row iframe {
+    pointer-events: none;
 }
 
 #current-result-frame {
