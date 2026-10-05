@@ -51,6 +51,9 @@ var methodMediaTypes = {
 };
 
 function setDocument(editor, content, mode) {
+    if (typeof mode !== 'undefined') {
+        mode = mode.toLowerCase();
+    }
     if (mode && modes[mode]) {
         editor.session.setMode(modes[mode]);
         // Wrapping is for what has no structure to follow: the plain-text
