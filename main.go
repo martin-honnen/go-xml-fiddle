@@ -449,7 +449,7 @@ func xslt30(this js.Value, args []js.Value) interface{} {
 	// it is the only entry.
 	docs := []resultDoc{{
 		uri:     labelPrimary,
-		content: serializeTo(result.Serialize),
+		content: result.String(), //serializeTo(result.Serialize),
 		method:  effectiveMethod(stylesheet.Output(), result.Nodes),
 	}}
 	// Each xsl:result-document is listed under the href the stylesheet wrote,
@@ -466,11 +466,12 @@ func xslt30(this js.Value, args []js.Value) interface{} {
 		}
 		docs = append(docs, resultDoc{
 			uri: label,
-			content: serializeTo(func(w io.Writer) error {
-				// nil keeps the document's own character map, which was
-				// resolved when it was produced.
-				return sec.Serialize(w, nil)
-			}),
+			//content: serializeTo(func(w io.Writer) error {
+			//	// nil keeps the document's own character map, which was
+			//	// resolved when it was produced.
+			//	return sec.Serialize(w, nil)
+			//}),
+			content: sec.String(),
 			// Its own output settings, which is the point of @format: a
 			// stylesheet may write XHTML chunks beside a JSON manifest.
 			method: effectiveMethod(sec.Output, sec.Nodes),
@@ -534,19 +535,53 @@ func xquery31(this js.Value, args []js.Value) interface{} {
 	ctx.Docs = resolver
 	ctx.Texts = resolver
 	setClock(ctx)
-	seq, err := xquery.Eval(args[0].String(), ctx, xquery.Options{
-		// BaseURI is what the query runs under; DeclarationBaseURI is what a
-		// relative "declare base-uri" in the prolog resolves against.
-		BaseURI:            queryBase,
-		DeclarationBaseURI: queryBase,
+
+	query, err := xquery.Compile(args[0].String(), xquery.Options{
+		//ModuleResolver: resolver,
+		//SchemaResolver: resolver,
+		BaseURI: queryBase,
 	})
 	if err != nil {
 		return fmt.Sprintf("xquery error: %v", err)
 	}
 
-	return serializeSequence(seq, xslt.OutputSettings{Method: "adaptive", Indent: true})
+	seq, err := query.Eval(ctx)
+	if err != nil {
+		return fmt.Sprintf("xquery error: %v", err)
+	}
+	var buf bytes.Buffer
+	writer := bufio.NewWriter(&buf)
+
+	opts, err := outputSettings(query.SerializationOptions())
+	if err != nil {
+		return fmt.Sprintf("xquery error: %v", err)
+	}
+	if err := xslt.Serialize(writer, seq, opts, nil); err != nil {
+		return fmt.Sprintf("serialization error: %v", err)
+	}
+	if err := writer.Flush(); err != nil {
+		return fmt.Sprintf("serialization error: %v", err)
+	}
+
+	return buf.String()
 }
 
+// outputSettings turns the prolog's "declare option output:*" set into the
+// serializer's settings, on the defaults tests/qt3 measures the serializer
+// against: the XML declaration is written unless asked away, except by the
+// adaptive method, and an unstated method is chosen from the result.
+func outputSettings(params map[string]string) (xslt.OutputSettings, error) {
+	o := xslt.OutputSettings{Encoding: "UTF-8"}
+	if strings.EqualFold(params["method"], "adaptive") {
+		o.OmitXMLDecl = true
+	}
+	for name, val := range params {
+		if err := xslt.SetSerializationParam(&o, name, val); err != nil {
+			return o, err
+		}
+	}
+	return o, nil
+}
 func serializeSequence(seq xdm.Sequence, settings xslt.OutputSettings) string {
 	var buf bytes.Buffer
 	writer := bufio.NewWriter(&buf)
