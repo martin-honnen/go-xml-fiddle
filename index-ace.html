@@ -19,6 +19,8 @@
 
     var autoEvaluation = false;
 
+    var validate = '';
+
     function evaluate() {
       var inputType = document.getElementById('input-types').form['input-type'].value;
       var codeType = document.getElementById('input-types').form['code-type'].value;
@@ -29,11 +31,11 @@
       //var inputBaseURI = inputFileName != '' && gistId != null ? new URL(inputFileName, gistBaseURI).href : 'urn:from-string';
       //var codeBaseURI = codeFileName != '' && gistId != null ? new URL(codeFileName, gistBaseURI).href : 'urn:from-string';
       if (codeType === 'XSLT')
-        transform(inputType !== 'None' ? inputEditor.session.getValue() : null, codeEditor.session.getValue(), inputType, codeBaseURI, inputBaseURI, document.getElementById('results'));
+        transform(inputType !== 'None' ? inputEditor.session.getValue() : null, codeEditor.session.getValue(), inputType, codeBaseURI, inputBaseURI, validate, document.getElementById('results'));
       else if (codeType === 'XQuery')
-        xquery(inputType !== 'None' ? inputEditor.session.getValue() : null, codeEditor.session.getValue(), inputType,  codeBaseURI, inputBaseURI, document.getElementById('results'));
+        xquery(inputType !== 'None' ? inputEditor.session.getValue() : null, codeEditor.session.getValue(), inputType,  codeBaseURI, inputBaseURI, validate, document.getElementById('results'));
       else if (codeType === 'XPath')
-        xpath(inputType !== 'None' ? inputEditor.session.getValue() : null, codeEditor.session.getValue(), inputType,  codeBaseURI, inputBaseURI, document.getElementById('results'));
+        xpath(inputType !== 'None' ? inputEditor.session.getValue() : null, codeEditor.session.getValue(), inputType,  codeBaseURI, inputBaseURI, validate, document.getElementById('results'));
     }
 
     function wait(time) {
@@ -154,7 +156,7 @@
     // Nothing relative can resolve against a urn: -- it is not hierarchical
     // -- so an xsl:include in hand-typed text is reported as unresolvable
     // rather than silently ignored, which is the right answer for it.
-    function xpath(input, xpathCode, inputType, codeBaseURI, inputBaseURI, resultsSelect) {
+    function xpath(input, xpathCode, inputType, codeBaseURI, inputBaseURI, validate, resultsSelect) {
         if (workerReady) {
             if (!autoEvaluation)
                 setDocument(resultEditor, "Evaluating your XPath...", "text");
@@ -165,13 +167,14 @@
                     inputType: inputType,
                     expression: xpathCode,
                     codeBaseURI: codeBaseURI,
-                    inputBaseURI: inputBaseURI
+                    inputBaseURI: inputBaseURI,
+                    validate: validate
                 }
             });
         }
     }
 
-    function xquery(input, xquery, inputType, codeBaseURI, inputBaseURI, resultsSelect) {
+    function xquery(input, xquery, inputType, codeBaseURI, inputBaseURI, validate, resultsSelect) {
         if (workerReady) {
             if (!autoEvaluation)
                 setDocument(resultEditor, "Processing your XQuery...", "text");
@@ -182,13 +185,14 @@
                     inputType: inputType,
                     query: xquery,
                     codeBaseURI: codeBaseURI,
-                    inputBaseURI: inputBaseURI
+                    inputBaseURI: inputBaseURI,
+                    validate: validate
                 }
             });
         }
     }
 
-    function transform(input, xslt, inputType, xsltBaseURI, inputBaseURI, resultsSelect) {
+    function transform(input, xslt, inputType, xsltBaseURI, inputBaseURI, validate, resultsSelect) {
         if (workerReady) {
             if (!autoEvaluation)
                 setDocument(resultEditor, "Processing your XSLT...", "text");
@@ -199,7 +203,8 @@
                     inputType: inputType,
                     xslt: xslt,
                     codeBaseURI: xsltBaseURI,
-                    inputBaseURI: inputBaseURI
+                    inputBaseURI: inputBaseURI,
+                    validate: validate
                 }
             });
         }
@@ -232,8 +237,9 @@
                 <!--<label><input type="radio" name="code-type" value="XSD">XSD</label>-->
             </fieldset>
         </form>
-      <label>Examples: <select id="examples" onchange="loadExample(this.options[this.selectedIndex].dataset.codeUrl, this.options[this.selectedIndex].dataset.codeType, this.options[this.selectedIndex].dataset.inputUrl, this.options[this.selectedIndex].dataset.inputType);">
+      <label>Examples: <select id="examples" onchange="loadExample(this.options[this.selectedIndex].dataset.codeUrl, this.options[this.selectedIndex].dataset.codeType, this.options[this.selectedIndex].dataset.inputUrl, this.options[this.selectedIndex].dataset.inputType, this.options[this.selectedIndex].dataset.validate);">
         <option data-code-url="" data-input-url="" data-code-type="XSLT" selected>-- choose an example --</option>
+        <option data-code-url="examples/xslt/system-properties/system-properties.xsl" data-code-type="XSLT" >XSLT 3.0 system-properties</option>
         <optgroup label="XSLT for-each-group group-by">
           <option data-code-url="examples/xslt/for-each-group/group-by/group-xml-cities-by-country.xsl" data-code-type="XSLT" data-input-url="examples/xslt/for-each-group/group-by/cities.xml" data-input-type="XML">group-by simple example 1</option>
           <option data-code-url="examples/xslt/for-each-group/group-by/group-xml-cities-by-name-and-country.xsl" data-code-type="XSLT" data-input-url="examples/xslt/for-each-group/group-by/cities-pop-year.xml" data-input-type="XML">group-by composite grouping key example 1</option>
@@ -262,6 +268,10 @@
             <option data-code-url="examples/xslt/fn-transform/post-process-test1.xsl" data-code-type="XSLT" data-input-url="examples/xslt/fn-transform/sample1.xml" data-input-type="XML">XSLT fn:transform and post-process example</option>
             <option data-code-url="examples/xquery/fn-transform/chain-stylesheets-fold-left-transform1.xq" data-code-type="XQuery" data-input-url="examples/xquery/fn-transform/sample1.xml" data-input-type="XML">XQuery chain XSLT stylesheets with fn:fold-left/fn:transform</option>
         </optgroup>
+        <optgroup label="schema-aware XSLT">
+            <option data-code-url="examples/xslt/schema-aware/process-items-test1.xsl" data-code-type="XSLT" data-validate="strict" data-input-url="examples/xslt/schema-aware/items-sample1.xml" data-input-type="XML">schema-aware XSLT sample 1 (valid)</option>
+            <option data-code-url="examples/xslt/schema-aware/process-items-test1.xsl" data-code-type="XSLT" data-validate="strict" data-input-url="examples/xslt/schema-aware/items-sample2.xml" data-input-type="XML">schema-aware XSLT sample 2 (invalid)</option>
+         </optgroup>
         <optgroup label="Schematron">
           <option data-code-url="examples/xslt/schematron/schxslt2/transpile.xsl" data-code-type="XSLT" data-input-url="examples/xslt/schematron/price.sch" data-input-type="XML">Schematron transpilation sample 1</option>
           <option data-code-url="examples/xslt/schematron/schxslt2/transpile.xsl" data-code-type="XSLT" data-input-url="examples/xslt/schematron/flowers.sch" data-input-type="XML">Schematron transpilation sample 2</option>

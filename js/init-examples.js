@@ -12,8 +12,14 @@ function loadDefaults() {
     setEditorFromUrl('examples/defaults/default.xsl', codeEditor);
 }
 
-function loadExample(codeSample, codeType, inputSample, inputType) {
-  if (codeSample) {
+function loadExample(codeSample, codeType, inputSample, inputType, validate) {
+    if (validate)  {
+        window.validate = validate;
+    }
+    else {
+        window.validate = '';
+    }
+    if (codeSample) {
     setEditorFromUrl(codeSample, codeEditor, codeType);
     codeBaseURI = new URL(codeSample, document.location).href;
     document.getElementById('input-type-form').elements['code-type'].value = codeType;

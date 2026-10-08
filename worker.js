@@ -40,7 +40,7 @@ onmessage = ({ data }) => {
         case "xslt":
             const xsltRes = self.xslt30(payload.xslt, payload.xml,
                 payload.inputType,
-                payload.codeBaseURI, payload.inputBaseURI);
+                payload.codeBaseURI, payload.inputBaseURI, payload.validate);
             postMessage({ action: "XSLT-Results", payload: xsltRes });
             break;
         case "xquery":

@@ -13,6 +13,7 @@ import (
 	"github.com/knroy/go-xml/xdm"
 	"github.com/knroy/go-xml/xpath"
 	"github.com/knroy/go-xml/xquery"
+	"github.com/knroy/go-xml/xsd"
 	"github.com/knroy/go-xml/xslt"
 )
 
@@ -379,7 +380,7 @@ func xslt30(this js.Value, args []js.Value) interface{} {
 		return errorResult("xslt error: a stylesheet is required")
 	}
 
-	inputType, sheetBase, sourceBase := stringArg(args, 2), stringArg(args, 3), stringArg(args, 4)
+	inputType, sheetBase, sourceBase, validate := stringArg(args, 2), stringArg(args, 3), stringArg(args, 4), stringArg(args, 5)
 	resolver := newFetchResolver()
 
 	stylesheetTree, err := xdm.ParseString(args[0].String(), xdm.ParseOptions{
@@ -400,6 +401,12 @@ func xslt30(this js.Value, args []js.Value) interface{} {
 	stylesheet, err := xslt.Compile(stylesheetTree.Root, xslt.CompileOptions{
 		Resolver: resolver,
 		BaseURI:  sheetBase,
+		SchemaResolver: func() xsd.Resolver {
+			if validate != "" {
+				return resolver
+			}
+			return nil
+		}(),
 	})
 	if err != nil {
 		return errorResult("xslt error: %v", err)
@@ -421,6 +428,14 @@ func xslt30(this js.Value, args []js.Value) interface{} {
 			})
 			if err != nil {
 				return errorResult("xslt error: invalid source XML: %v", err)
+			}
+			if validate != "" {
+				if stylesheet.Schema() == nil {
+					return errorResult("Validation requested but stylesheet doesn't import any schemas.")
+				}
+				if err := validateSource(stylesheet.Schema(), sourceTree.Root, validate); err != nil {
+					return errorResult("xslt error: source validation failed: %v", err)
+				}
 			}
 			source = sourceTree.Root
 			// So that fn:doc of this document's own URI hands back these very
@@ -592,4 +607,23 @@ func serializeSequence(seq xdm.Sequence, settings xslt.OutputSettings) string {
 		return fmt.Sprintf("serialization error: %v", err)
 	}
 	return buf.String()
+}
+
+// validateSource assesses a source document against the stylesheet's imported
+// schema and annotates it, which is what makes a validated <price> atomise to
+// an xs:decimal rather than to xs:untypedAtomic. Without Annotate the schema
+// would only check the document, and the stylesheet would see it untyped.
+// Lax assessment skips a document element the schema does not declare, as
+// validation="lax" does in a stylesheet.
+func validateSource(schema *xsd.Schema, doc *xdm.Node, mode string) error {
+	opts := xsd.ValidateOptions{Annotate: true}
+	if mode == "strict" {
+		return schema.Validate(doc, opts)
+	}
+	for _, c := range doc.Children {
+		if c.Kind == xdm.KindElement {
+			return schema.ValidateElementLax(c, opts)
+		}
+	}
+	return nil
 }

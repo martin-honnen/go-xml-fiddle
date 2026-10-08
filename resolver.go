@@ -4,14 +4,16 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"strings"
 	"sync"
 	"syscall/js"
 
 	"github.com/knroy/go-xml/xdm"
+	"github.com/knroy/go-xml/xsd"
 )
 
-// fetchResolver loads stylesheet modules and documents by URI, using a
+// fetchResolver loads stylesheet modules, schemas and documents by URI, using a
 // synchronous XMLHttpRequest.
 //
 // Without one of these, go-xml disables xsl:include and xsl:import entirely —
@@ -45,6 +47,25 @@ const resolverCacheMax = 1024
 
 func newFetchResolver() *fetchResolver {
 	return &fetchResolver{cache: map[string]*xdm.Tree{}}
+}
+
+var _ xsd.Resolver = (*fetchResolver)(nil)
+
+// Resolve implements xsd.Resolver for schema imports and includes.
+// Namespace-only requests have no location to fetch and no catalogue to consult.
+func (r *fetchResolver) Resolve(namespace, location, base string) (io.ReadCloser, string, error) {
+	if location == "" {
+		return nil, "", nil
+	}
+	uri, err := resolveURI(location, base)
+	if err != nil {
+		return nil, "", err
+	}
+	body, err := httpGet(uri, "")
+	if err != nil {
+		return nil, "", err
+	}
+	return io.NopCloser(strings.NewReader(body)), uri, nil
 }
 
 // ResolveModule implements xslt.ModuleResolver for xsl:include and xsl:import.
