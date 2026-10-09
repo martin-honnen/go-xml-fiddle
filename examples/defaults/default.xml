@@ -5,7 +5,7 @@
   </head>
   <body>
     <section>
-      <h1>Release 1.6.0 beta 1</h1>
+      <h1>Release 1.7.1 beta 1</h1>
       <section>
         <h2>Features using go-xml</h2>
         <ul>
@@ -14,6 +14,7 @@
           <li>XQuery 3.1 against XML or JSON input or no input</li>
           <li>XPath 3.1 against XML or JSON input or no input, now with prefixes/namespaces <code>xs</code>, <code>map</code>, <code>array</code>, <code>math</code> and <code>err</code> predeclared</li>
           <li>optional automatic evaluation of XSLT/XQuery/XPath as go-xml is run from a web worker</li>
+          <li>schema-aware XSLT 3.0 (currently enabled for some examples)</li>
         </ul>
       </section>
     </section>
