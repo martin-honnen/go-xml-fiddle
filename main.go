@@ -7,14 +7,15 @@ import (
 	"fmt"
 	"io"
 	"strings"
+
 	"syscall/js"
 	"time"
 
-	"github.com/knroy/go-xml/xdm"
-	"github.com/knroy/go-xml/xpath"
-	"github.com/knroy/go-xml/xquery"
-	"github.com/knroy/go-xml/xsd"
-	"github.com/knroy/go-xml/xslt"
+	"github.com/knroy/go-xml/v2/xdm"
+	"github.com/knroy/go-xml/v2/xpath"
+	"github.com/knroy/go-xml/v2/xquery"
+	"github.com/knroy/go-xml/v2/xsd"
+	"github.com/knroy/go-xml/v2/xslt"
 )
 
 func main() {
@@ -225,7 +226,7 @@ func effectiveMethod(declared xslt.OutputSettings, seq xdm.Sequence) string {
 		return "xml"
 	}
 	switch {
-	case first.Name.URI == nsXHTML && first.Name.Local == "html":
+	case first.Name().URI == nsXHTML && first.Name().Local == "html":
 		// A 1.0 stylesheet whose result tree was built implicitly keeps the
 		// XML method, which is the backwards-compatibility case go-xml
 		// records in this flag.
@@ -233,7 +234,7 @@ func effectiveMethod(declared xslt.OutputSettings, seq xdm.Sequence) string {
 			return "xml"
 		}
 		return "xhtml"
-	case first.Name.URI == "" && strings.EqualFold(first.Name.Local, "html"):
+	case first.Name().URI == "" && strings.EqualFold(first.Name().Local, "html"):
 		return "html"
 	}
 	return "xml"
@@ -255,10 +256,10 @@ func firstResultElement(seq xdm.Sequence) *xdm.Node {
 		for _, item := range items {
 			switch v := item.(type) {
 			case *xdm.Node:
-				switch v.Kind {
+				switch v.Kind() {
 				case xdm.KindDocument:
-					kids := make(xdm.Sequence, 0, len(v.Children))
-					for _, c := range v.Children {
+					kids := make(xdm.Sequence, 0, v.NumChildren())
+					for c := range v.Children() {
 						kids = append(kids, c)
 					}
 					if !scan(kids) {
@@ -270,7 +271,7 @@ func firstResultElement(seq xdm.Sequence) *xdm.Node {
 					}
 					return false
 				case xdm.KindText:
-					if !xdm.IsXMLWhitespace(v.Value) {
+					if !xdm.IsXMLWhitespace(v.Value()) {
 						return false
 					}
 				}
@@ -300,8 +301,8 @@ func firstResultElement(seq xdm.Sequence) *xdm.Node {
 // from Context.ImplicitTimezone, whose zero value is Z, and not from the Go
 // time's own location. That matches what a transformation reports here, since
 // xslt.TransformOptions.ImplicitTimezone is left at its zero value too.
-func setClock(ctx *xpath.Context) {
-	ctx.Now, ctx.HasNow = time.Now(), true
+func setClock(e *xpath.Env) {
+	e.Now, e.HasNow = time.Now(), true
 }
 
 func xpathEval(this js.Value, args []js.Value) interface{} {
@@ -343,14 +344,15 @@ func xpathEval(this js.Value, args []js.Value) interface{} {
 		}
 	}
 
-	ctx := xpath.NewContext(item, xpath.Builtins())
-	ctx.Version = xpath.XPath31
+	ctx := xpath.NewContext(item, xpath.Builtins(), func(e *xpath.Env) {
+		e.Docs = resolver
+		e.Texts = resolver
+		setClock(e)
+	})
+	ctx = ctx.WithVersion(xpath.XPath31)
 	// The expression's own base URI, which is what a relative reference in
 	// fn:doc resolves against and what fn:static-base-uri reports.
-	ctx.StaticBaseURI = exprBase
-	ctx.Docs = resolver
-	ctx.Texts = resolver
-	setClock(ctx)
+	ctx = ctx.WithStaticBaseURI(exprBase)
 	seq, err := compiled.Eval(ctx)
 
 	if err != nil {
@@ -433,11 +435,14 @@ func xslt30(this js.Value, args []js.Value) interface{} {
 				if stylesheet.Schema() == nil {
 					return errorResult("Validation requested but stylesheet doesn't import any schemas.")
 				}
-				if err := validateSource(stylesheet.Schema(), sourceTree.Root, validate); err != nil {
+				typed, err := validateSource(stylesheet.Schema(), sourceTree.Root, validate)
+				if err != nil {
 					return errorResult("xslt error: source validation failed: %v", err)
 				}
+				source = typed
+			} else {
+				source = sourceTree.Root
 			}
-			source = sourceTree.Root
 			// So that fn:doc of this document's own URI hands back these very
 			// nodes rather than a second parse of the same bytes.
 			resolver.Preload(sourceBase, sourceTree)
@@ -545,11 +550,12 @@ func xquery31(this js.Value, args []js.Value) interface{} {
 		}
 	}
 
-	ctx := xpath.NewContext(item, xpath.Builtins())
-	ctx.Version = xpath.XPath31
-	ctx.Docs = resolver
-	ctx.Texts = resolver
-	setClock(ctx)
+	ctx := xpath.NewContext(item, xpath.Builtins(), func(e *xpath.Env) {
+		e.Docs = resolver
+		e.Texts = resolver
+		setClock(e)
+	})
+	ctx = ctx.WithVersion(xpath.XPath31)
 
 	query, err := xquery.Compile(args[0].String(), xquery.Options{
 		//ModuleResolver: resolver,
@@ -610,20 +616,33 @@ func serializeSequence(seq xdm.Sequence, settings xslt.OutputSettings) string {
 }
 
 // validateSource assesses a source document against the stylesheet's imported
-// schema and annotates it, which is what makes a validated <price> atomise to
-// an xs:decimal rather than to xs:untypedAtomic. Without Annotate the schema
-// would only check the document, and the stylesheet would see it untyped.
+// schema and returns a typed copy of it, which is what makes a validated
+// <price> atomise to an xs:decimal rather than to xs:untypedAtomic. Validate
+// alone would only check the document, and the stylesheet would see it untyped.
 // Lax assessment skips a document element the schema does not declare, as
 // validation="lax" does in a stylesheet.
-func validateSource(schema *xsd.Schema, doc *xdm.Node, mode string) error {
-	opts := xsd.ValidateOptions{Annotate: true}
+func validateSource(schema *xsd.Schema, doc *xdm.Node, mode string) (*xdm.Node, error) {
+	opts := xsd.ValidateOptions{}
 	if mode == "strict" {
-		return schema.Validate(doc, opts)
+		return schema.ValidateCopy(doc, opts)
 	}
-	for _, c := range doc.Children {
-		if c.Kind == xdm.KindElement {
-			return schema.ValidateElementLax(c, opts)
+	tree := xdm.NewTree()
+	tree.Root.SetBaseURI(doc.BaseURI())
+	tree.Root.SetDocumentURI(doc.DocumentURI())
+	var err error
+	validated := false
+	for c := range doc.Children() {
+		if c.Kind() == xdm.KindElement && !validated {
+			validated = true
+			var typed *xdm.Node
+			typed, err = schema.ValidateElementLaxCopy(c, opts)
+			if typed != nil {
+				tree.Root.AppendCopy(typed)
+			}
+			continue
 		}
+		tree.Root.AppendCopy(c)
 	}
-	return nil
+	tree.Finalize()
+	return tree.Root, err
 }
