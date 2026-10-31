@@ -520,21 +520,38 @@ func xslt30(this js.Value, args []js.Value) interface{} {
 // the query and the optional second argument is the context XML document.
 func xquery31(this js.Value, args []js.Value) interface{} {
 	if len(args) == 0 || args[0].Type() != js.TypeString {
-		return "xquery error: a query is required"
+		return "XQuery error: a query is required"
 	}
 
-	inputType, queryBase, sourceBase := stringArg(args, 2), stringArg(args, 3), stringArg(args, 4)
+	inputType, queryBase, sourceBase, validate := stringArg(args, 2), stringArg(args, 3), stringArg(args, 4), stringArg(args, 5)
+
 	resolver := newFetchResolver()
+
+	query, err := xquery.Compile(args[0].String(), xquery.Options{
+		//ModuleResolver: resolver,
+		//SchemaResolver: resolver,
+		BaseURI: queryBase,
+		SchemaResolver: func() xsd.Resolver {
+			if validate != "" {
+				return resolver
+			}
+			return nil
+		}(),
+	})
+
+	if err != nil {
+		return fmt.Sprintf("XQuery error: %v", err)
+	}
 
 	var item xdm.Item
 	if len(args) > 1 && args[1].Type() == js.TypeString {
 		if inputType == "JSON" {
 			seq, err := parseJSON(args[1].String())
 			if err != nil {
-				return fmt.Sprintf("xquery error: invalid input JSON: %v", err)
+				return fmt.Sprintf("XQuery error: invalid input JSON: %v", err)
 			}
 			if len(seq) != 1 {
-				return "xquery error: parsing JSON did not produce one XDM item"
+				return "XQuery error: parsing JSON did not produce one XDM item"
 			}
 			item = seq[0]
 		} else {
@@ -543,9 +560,21 @@ func xquery31(this js.Value, args []js.Value) interface{} {
 				DocumentURI: sourceBase,
 			})
 			if err != nil {
-				return fmt.Sprintf("xquery error: invalid input XML: %v", err)
+				return fmt.Sprintf("XQuery error: invalid input XML: %v", err)
 			}
-			item = tree.Root
+
+			if validate != "" {
+				if query.Schema() == nil {
+					return "Validation requested but XQuery doesn't import any schemas."
+				}
+				typed, err := validateSource(query.Schema(), tree.Root, validate)
+				if err != nil {
+					return fmt.Sprintf("XQuery error: source validation failed: %v", err)
+				}
+				item = typed
+			} else {
+				item = tree.Root
+			}
 			resolver.Preload(sourceBase, tree)
 		}
 	}
@@ -557,31 +586,22 @@ func xquery31(this js.Value, args []js.Value) interface{} {
 	})
 	ctx = ctx.WithVersion(xpath.XPath31)
 
-	query, err := xquery.Compile(args[0].String(), xquery.Options{
-		//ModuleResolver: resolver,
-		//SchemaResolver: resolver,
-		BaseURI: queryBase,
-	})
-	if err != nil {
-		return fmt.Sprintf("xquery error: %v", err)
-	}
-
 	seq, err := query.Eval(ctx)
 	if err != nil {
-		return fmt.Sprintf("xquery error: %v", err)
+		return fmt.Sprintf("XQuery error: %v", err)
 	}
 	var buf bytes.Buffer
 	writer := bufio.NewWriter(&buf)
 
 	opts, err := outputSettings(query.SerializationOptions())
 	if err != nil {
-		return fmt.Sprintf("xquery error: %v", err)
+		return fmt.Sprintf("XQuery error: %v", err)
 	}
 	if err := xslt.Serialize(writer, seq, opts, nil); err != nil {
-		return fmt.Sprintf("serialization error: %v", err)
+		return fmt.Sprintf("XQuery error: %v", err)
 	}
 	if err := writer.Flush(); err != nil {
-		return fmt.Sprintf("serialization error: %v", err)
+		return fmt.Sprintf("Serialization error: %v", err)
 	}
 
 	return buf.String()

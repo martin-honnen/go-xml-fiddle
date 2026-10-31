@@ -46,7 +46,7 @@ onmessage = ({ data }) => {
         case "xquery":
             const xqueryRes = self.xquery31(payload.query, payload.xml,
                 payload.inputType,
-                payload.codeBaseURI, payload.inputBaseURI);
+                payload.codeBaseURI, payload.inputBaseURI, payload.validate);
             postMessage({ action: "result", payload: xqueryRes });
             break;
         default:
