@@ -1,0 +1,22 @@
+<root>
+    <item>
+        <name>item 1</name>
+        <value>12.34</value>
+    </item>
+    <item>
+        <name>item 2</name>
+        <value>56.78</value>
+    </item>
+    <item>
+        <name>item 3</name>
+        <value></value>
+    </item>
+    <item>
+        <name>item 4</name>
+        <value>34.56</value>
+    </item>
+    <item>
+        <name>item 5</name>
+        <value>78.90</value>
+    </item>
+</root>
